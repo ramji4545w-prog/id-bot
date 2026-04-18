@@ -5,114 +5,112 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes
 )
 
+# 🔑 TOKEN & ADMIN ID
 TOKEN = "YOUR_BOT_TOKEN"
-ADMIN_ID = 123456789  # yaha apna telegram user id daal
+ADMIN_ID = 123456789  # apna telegram user id daal
 
 logging.basicConfig(level=logging.INFO)
 
-# user data store (simple)
-user_data_store = {}
+users = {}
 
 # START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("🆕 New ID", callback_data="new_id")],
-        [InlineKeyboardButton("🎮 Demo ID", callback_data="demo_id")]
+        [InlineKeyboardButton("🆕 New ID", callback_data="new")],
+        [InlineKeyboardButton("🎮 Demo ID", callback_data="demo")]
     ]
     await update.message.reply_text(
-        "Select option:",
+        "Select Option:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# HANDLE BUTTONS
+# BUTTON HANDLER
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    user_id = query.from_user.id
+    uid = query.from_user.id
+    users[uid] = {}
 
-    if query.data in ["new_id", "demo_id"]:
-        user_data_store[user_id] = {"type": query.data}
+    if query.data in ["new", "demo"]:
+        users[uid]["type"] = query.data
 
-        sites = [
-            [InlineKeyboardButton("Laser247", callback_data="site1")],
-            [InlineKeyboardButton("Tiger399", callback_data="site2")],
-            [InlineKeyboardButton("AllPanelExch9", callback_data="site3")],
-            [InlineKeyboardButton("DiamondExchange", callback_data="site4")]
+        keyboard = [
+            [InlineKeyboardButton("Laser247", callback_data="laser")],
+            [InlineKeyboardButton("Tiger399", callback_data="tiger")],
+            [InlineKeyboardButton("AllPanelExch9", callback_data="allpanel")],
+            [InlineKeyboardButton("DiamondExchange", callback_data="diamond")]
         ]
 
         await query.message.reply_text(
             "Select Site:",
-            reply_markup=InlineKeyboardMarkup(sites)
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-    elif query.data.startswith("site"):
-        user_data_store[user_id]["site"] = query.data
-        await query.message.reply_text("Enter your Name:")
-
+    elif query.data in ["laser", "tiger", "allpanel", "diamond"]:
+        users[uid]["site"] = query.data
+        await query.message.reply_text("Enter Name:")
         context.user_data["step"] = "name"
 
     elif query.data.startswith("accept_"):
-        target_user = int(query.data.split("_")[1])
-        await context.bot.send_message(target_user, "✅ Payment Accepted! Your ID will be shared soon.")
+        user_id = int(query.data.split("_")[1])
+        await context.bot.send_message(user_id, "✅ Payment Accepted\nID will be sent soon.")
         await query.message.reply_text("Accepted ✅")
 
     elif query.data.startswith("decline_"):
-        target_user = int(query.data.split("_")[1])
-        await context.bot.send_message(target_user, "❌ Payment Not Received")
+        user_id = int(query.data.split("_")[1])
+        await context.bot.send_message(user_id, "❌ Payment Not Received")
         await query.message.reply_text("Declined ❌")
 
 
-# HANDLE MESSAGES (FLOW)
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
+# MESSAGE FLOW
+async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.message.from_user.id
     text = update.message.text
 
-    if user_id not in user_data_store:
+    if uid not in users:
         return
 
     step = context.user_data.get("step")
 
     if step == "name":
-        user_data_store[user_id]["name"] = text
+        users[uid]["name"] = text
         await update.message.reply_text("Enter Mobile Number:")
         context.user_data["step"] = "number"
 
     elif step == "number":
-        user_data_store[user_id]["number"] = text
+        users[uid]["number"] = text
         await update.message.reply_text("Enter Amount:")
         context.user_data["step"] = "amount"
 
     elif step == "amount":
-        user_data_store[user_id]["amount"] = text
+        users[uid]["amount"] = text
 
-        # payment info
         await update.message.reply_text(
-            f"Pay ₹{text} to UPI: yourupi@upi\n\n"
-            "Send Screenshot + UTR after payment."
+            f"💰 Pay ₹{text}\n\nUPI: yourupi@upi\n\nSend Screenshot + UTR"
         )
 
-        context.user_data["step"] = "payment"
+        context.user_data["step"] = "utr"
 
-    elif step == "payment":
-        user_data_store[user_id]["utr"] = text
+    elif step == "utr":
+        users[uid]["utr"] = text
 
-        data = user_data_store[user_id]
+        data = users[uid]
 
         msg = f"""
-📥 New Payment Request
+📥 NEW PAYMENT REQUEST
 
 👤 Name: {data['name']}
 📱 Number: {data['number']}
-💰 Amount: {data['amount']}
 🌐 Site: {data['site']}
+💰 Amount: {data['amount']}
 🔢 UTR: {data['utr']}
 """
 
         keyboard = [
             [
-                InlineKeyboardButton("✅ Accept", callback_data=f"accept_{user_id}"),
-                InlineKeyboardButton("❌ Decline", callback_data=f"decline_{user_id}")
+                InlineKeyboardButton("✅ Accept", callback_data=f"accept_{uid}"),
+                InlineKeyboardButton("❌ Decline", callback_data=f"decline_{uid}")
             ]
         ]
 
@@ -122,19 +120,22 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-        await update.message.reply_text("⏳ Please wait 5 minutes for approval")
+        await update.message.reply_text("⏳ Wait 5 min for approval")
 
         context.user_data.clear()
 
 
 # MAIN
-if name == "__main__":
+def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
 
- print("Bot running...")
+    print("Bot Running...")
     app.run_polling()
 
+
+if __name__ == "__main__":
+    main()
