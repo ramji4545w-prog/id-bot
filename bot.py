@@ -135,6 +135,6 @@ if name == "__main__":
     app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
-    print("Bot running...")
+ print("Bot running...")
     app.run_polling()
 
